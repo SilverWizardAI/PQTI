@@ -18,6 +18,7 @@ from mcp.types import Tool, TextContent
 # Framework-agnostic app controller
 from .app_controller import AppController
 from .adapters.pyqt6 import PyQt6Adapter
+from .adapters.flet import FletAdapter
 
 # Configure logging to stderr (stdout is for MCP protocol)
 logging.basicConfig(
@@ -224,6 +225,7 @@ async def main():
     # Initialize controller and register adapters
     controller = AppController()
     controller.register_adapter(PyQt6Adapter())
+    controller.register_adapter(FletAdapter())
     logger.info(f"Registered adapters: {controller.list_adapters()}")
 
     try:

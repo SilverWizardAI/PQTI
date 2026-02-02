@@ -148,25 +148,47 @@ class InstrumentationHandler(BaseHTTPRequestHandler):
 
     def _find_control_by_ref(self, ref):
         """Find control by reference path."""
+        if not ref or ref == "root":
+            return self.server.flet_page
+
         parts = ref.split('/')[1:]  # Skip 'root'
         current = self.server.flet_page
 
         for part in parts:
-            if part.isdigit():
-                idx = int(part)
-                if hasattr(current, 'controls') and idx < len(current.controls):
-                    current = current.controls[idx]
+            if not current:
+                return None
+
+            # Try to find by data attribute first
+            if hasattr(current, 'controls'):
+                found = False
+                for control in current.controls:
+                    if getattr(control, 'data', None) == part:
+                        current = control
+                        found = True
+                        break
+
+                if found:
+                    continue
+
+                # Try indexed reference: TypeName[index]
+                if '[' in part:
+                    type_name = part.split('[')[0]
+                    index = int(part.split('[')[1].rstrip(']'))
+
+                    matching = [
+                        c for c in current.controls
+                        if type(c).__name__ == type_name
+                    ]
+
+                    if index < len(matching):
+                        current = matching[index]
+                        continue  # Continue to next part of path
+                    else:
+                        return None
                 else:
                     return None
             else:
-                # Look for control with data=part or specific type
-                if hasattr(current, 'controls'):
-                    for control in current.controls:
-                        if getattr(control, 'data', None) == part:
-                            current = control
-                            break
-                    else:
-                        return None
+                return None
 
         return current
 

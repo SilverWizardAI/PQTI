@@ -697,6 +697,69 @@ PQTI/
 
 ---
 
+## FLET DOCUMENTATION BUG FIX (2026-02-03) - ✅ FIXED
+
+### 🐛 Bug Discovered During MacR Testing
+
+**Reporter:** MacR (Mac Retriever) project during real-world PQTI testing
+**Severity:** High (blocks Flet app automation)
+**Status:** ✅ FIXED
+
+### Issue
+Control navigation failed for nested `Type[index]` references in the documented Flet instrumentation code. When navigating paths like `root/Column[0]/TextField[1]`, the function would find `Column[0]` but fail to continue processing `TextField[1]`.
+
+### Root Cause
+Missing `continue` statement in `_find_control_by_ref()` function after successfully matching type-indexed controls. The code would set `current = matching[index]` but then fall through to `return None` instead of continuing to the next path component.
+
+### Impact
+- **Blocked UI automation** for apps with nested containers (columns, rows, etc.)
+- **MacR testing halted** - search tab has nested structure that couldn't be navigated
+- **Workaround required** - database-level tests + manual UI testing
+
+### Fix Applied
+
+**Buggy Code:**
+```python
+if index < len(matching):
+    current = matching[index]
+    # ❌ Missing continue - falls through to return None
+else:
+    return None
+```
+
+**Fixed Code:**
+```python
+if index < len(matching):
+    current = matching[index]
+    continue  # ✅ Continue to next part of path
+else:
+    return None
+```
+
+### Files Updated
+1. ✅ `Product/ADDING_PQTI_TO_FLET_APPS.md` - Line 252 (added continue)
+2. ✅ `docs/FLET_ADAPTER_PLAN.md` - Complete rewrite with fixed comprehensive version
+3. ✅ `PQTI_BUG_REPORT.md` - Detailed bug analysis and fix documentation
+
+### Verification
+After fix, nested navigation now works correctly:
+```python
+# Now works:
+_find_control_by_ref("root/Column[0]/TextField[1]")  # ✅ Returns TextField
+_find_control_by_ref("root/Column[0]/Row[0]/Button[2]")  # ✅ Returns Button
+```
+
+### Benefits
+- ✅ **MacR can now proceed** with PQTI-based UI automation
+- ✅ **Future Flet implementations** won't hit this bug
+- ✅ **Real-world testing validated** the documentation before wide adoption
+- ✅ **Bug report created** for reference and learning
+
+### Discovery Credit
+This bug was discovered through **dogfooding** - MacR implemented the Flet instrumentation following PQTI docs, then used PQTI to test its own UI. This is exactly the validation process that makes PQTI better!
+
+---
+
 ## Contact/Notes
 
 - Built as framework-agnostic GUI testing library
@@ -708,7 +771,7 @@ PQTI/
 
 **Next Session:** Integrate with Flet and PyQt6 apps! 🎯
 
-**Last Updated:** 2026-02-03 (PRODUCT DOCUMENTATION COMPLETE ✅ - Comprehensive docs ready, PyQt6 production-ready, Flet adapter skeleton prepared, ready to dogfood with real apps)
+**Last Updated:** 2026-02-03 (FLET BUG FIX ✅ - Fixed nested Type[index] navigation bug discovered during MacR testing, documentation updated, ready for Flet integration)
 
 ---
 

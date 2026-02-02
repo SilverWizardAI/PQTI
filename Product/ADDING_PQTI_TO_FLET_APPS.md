@@ -249,6 +249,7 @@ class InstrumentationHandler(BaseHTTPRequestHandler):
 
                     if index < len(matching):
                         current = matching[index]
+                        continue  # Continue to next part of path
                     else:
                         return None
                 else:

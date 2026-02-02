@@ -18,7 +18,12 @@ from mcp.types import Tool, TextContent
 # Qt IPC client
 from .qt_client import QtInstrumentClient
 
-logging.basicConfig(level=logging.INFO)
+# Configure logging to stderr (stdout is for MCP protocol)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    stream=sys.stderr
+)
 logger = logging.getLogger(__name__)
 
 # Global client instance
@@ -102,13 +107,17 @@ async def handle_tool_call(name: str, arguments: dict[str, Any]) -> list[TextCon
     """Handle tool calls from Claude Code."""
     global qt_client
 
+    logger.info(f"Tool call: {name} with args: {arguments}")
+
     try:
         if name == "qt_connect":
             server_name = arguments.get("server_name", "qt_instrument")
+            logger.info(f"Attempting to connect to Qt server: {server_name}")
             qt_client = QtInstrumentClient()
             success = await qt_client.connect(server_name)
 
             if success:
+                logger.info(f"Successfully connected to Qt application: {server_name}")
                 return [
                     TextContent(
                         type="text",
@@ -116,6 +125,7 @@ async def handle_tool_call(name: str, arguments: dict[str, Any]) -> list[TextCon
                     )
                 ]
             else:
+                logger.warning(f"Failed to connect to Qt application: {server_name}")
                 return [
                     TextContent(
                         type="text",
@@ -125,6 +135,7 @@ async def handle_tool_call(name: str, arguments: dict[str, Any]) -> list[TextCon
 
         # All other commands require an active connection
         if qt_client is None:
+            logger.warning(f"Tool {name} called without active connection")
             return [
                 TextContent(
                     type="text",
@@ -133,43 +144,55 @@ async def handle_tool_call(name: str, arguments: dict[str, Any]) -> list[TextCon
             ]
 
         if name == "qt_snapshot":
+            logger.info("Getting Qt widget snapshot")
             result = await qt_client.send_request("snapshot", {})
+            logger.info(f"Snapshot received with {len(str(result))} bytes")
             snapshot_json = json.dumps(result, indent=2)
             return [TextContent(type="text", text=f"Widget Tree:\n```json\n{snapshot_json}\n```")]
 
         elif name == "qt_click":
             ref = arguments["ref"]
             button = arguments.get("button", "left")
+            logger.info(f"Clicking widget {ref} with button {button}")
             result = await qt_client.send_request("click", {"ref": ref, "button": button})
 
             if result.get("success"):
+                logger.info(f"Successfully clicked widget: {ref}")
                 return [TextContent(type="text", text=f"✓ Clicked widget: {ref}")]
             else:
                 error = result.get("error", "Unknown error")
+                logger.error(f"Failed to click widget {ref}: {error}")
                 return [TextContent(type="text", text=f"✗ Failed to click widget: {error}")]
 
         elif name == "qt_type":
             ref = arguments["ref"]
             text = arguments["text"]
             submit = arguments.get("submit", False)
+            logger.info(f"Typing into widget {ref}: '{text}' (submit={submit})")
             result = await qt_client.send_request(
                 "type", {"ref": ref, "text": text, "submit": submit}
             )
 
             if result.get("success"):
+                logger.info(f"Successfully typed into widget: {ref}")
                 return [TextContent(type="text", text=f"✓ Typed '{text}' into widget: {ref}")]
             else:
                 error = result.get("error", "Unknown error")
+                logger.error(f"Failed to type into widget {ref}: {error}")
                 return [TextContent(type="text", text=f"✗ Failed to type text: {error}")]
 
         elif name == "qt_ping":
+            logger.debug("Pinging Qt application")
             result = await qt_client.send_request("ping", {})
             if result.get("status") == "ok":
+                logger.debug("Ping successful")
                 return [TextContent(type="text", text="✓ Connection alive")]
             else:
+                logger.warning("Ping failed")
                 return [TextContent(type="text", text="✗ Connection issue")]
 
         else:
+            logger.error(f"Unknown tool requested: {name}")
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
     except Exception as e:
@@ -180,20 +203,40 @@ async def handle_tool_call(name: str, arguments: dict[str, Any]) -> list[TextCon
 async def main():
     """Main entry point for MCP server."""
     logger.info("Starting PyQt Instrument MCP Server")
+    logger.info(f"Python version: {sys.version}")
+    logger.info(f"Working directory: {sys.path[0]}")
 
-    server = Server("pyqt-instrument")
+    try:
+        server = Server("pyqt-instrument")
 
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return create_tools()
+        @server.list_tools()
+        async def list_tools() -> list[Tool]:
+            logger.debug("Tools list requested")
+            tools = create_tools()
+            logger.info(f"Returning {len(tools)} tools")
+            return tools
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: Any) -> list[TextContent]:
-        return await handle_tool_call(name, arguments)
+        @server.call_tool()
+        async def call_tool(name: str, arguments: Any) -> list[TextContent]:
+            return await handle_tool_call(name, arguments)
 
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, server.create_initialization_options())
+        logger.info("Server initialized, starting stdio loop")
+        async with stdio_server() as (read_stream, write_stream):
+            logger.info("Stdio streams ready, running server")
+            await server.run(read_stream, write_stream, server.create_initialization_options())
+
+    except KeyboardInterrupt:
+        logger.info("Received interrupt, shutting down")
+    except Exception as e:
+        logger.error(f"Fatal error in MCP server: {e}", exc_info=True)
+        raise
+    finally:
+        logger.info("PyQt Instrument MCP Server stopped")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        logger.error(f"Failed to start MCP server: {e}", exc_info=True)
+        sys.exit(1)

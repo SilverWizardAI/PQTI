@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-02
 **Python:** 3.13.11 (via UV)
-**Status:** ✅ MCP Server Fixed - Ready for Testing After CC Restart
+**Status:** ✅ Permissions Fixed - Ready for Live Testing
 
 ---
 
@@ -177,6 +177,50 @@ All MCP activity is logged to `~/.claude/debug/latest` with detailed information
 
 ---
 
+## PERMISSION FIX (2026-02-02 Late Evening) - Claude Code Permissions Resolved
+
+### 🔴 Problem Discovered
+**MCP tools were prompting for permission** every time they were used, despite restarting Claude Code.
+
+**Root Cause:**
+Claude Code's permission system in `~/.claude/settings.local.json` was blocking:
+- All MCP tools (not in allow list)
+- File operations in PQTI folder (Read, Write, Edit, Glob, Grep)
+
+The global settings file has an `allow` list that must explicitly include tools and file patterns. MCP tools and PQTI folder access were missing.
+
+### ✅ Fix Applied
+
+**Updated `~/.claude/settings.local.json`:**
+
+Added to the `permissions.allow` array:
+```json
+"mcp__pyqt-instrument__*",
+"Read(/Users/stevedeighton/Library/CloudStorage/Dropbox/A_Coding/PQTI/**)",
+"Write(/Users/stevedeighton/Library/CloudStorage/Dropbox/A_Coding/PQTI/**)",
+"Edit(/Users/stevedeighton/Library/CloudStorage/Dropbox/A_Coding/PQTI/**)",
+"Glob(/Users/stevedeighton/Library/CloudStorage/Dropbox/A_Coding/PQTI/**)",
+"Grep(/Users/stevedeighton/Library/CloudStorage/Dropbox/A_Coding/PQTI/**)",
+"Bash(/Users/stevedeighton/Library/CloudStorage/Dropbox/A_Coding/PQTI:*)"
+```
+
+**Key Insights:**
+- MCP permission format: `mcp__<server-name>__*` (use wildcard for all tools)
+- File operations need explicit path patterns with `**` wildcards
+- The format does NOT use parentheses with wildcards for MCP tools
+
+**File Modified:**
+`~/.claude/settings.local.json` (personal config, not in repo)
+
+### 🚀 Next Action: RESTART CLAUDE CODE
+
+**You MUST restart Claude Code for permissions to take effect:**
+1. Exit this Claude Code session completely
+2. Restart Claude Code in PQTI folder
+3. MCP tools will now work without permission prompts
+
+---
+
 ## What's Next
 
 ### Immediate (Testing Phase)
@@ -184,24 +228,16 @@ All MCP activity is logged to `~/.claude/debug/latest` with detailed information
 1. **Restart Claude Code** ← **CURRENT STEP**
    - Exit this Claude Code session completely
    - Restart Claude Code in PQTI folder
-   - MCP server will load from `.mcp.json`
-   - Check debug logs for "PyQt Instrument MCP Server" startup message
+   - Permissions will take effect
+   - MCP server will load without prompts
 
-2. **Verify MCP Tools Available**
-   - Tools should appear: `qt_connect`, `qt_snapshot`, `qt_click`, `qt_type`, `qt_ping`
-   - If not, check `~/.claude/debug/latest` for errors
+2. **Live Testing** ← **NEXT AFTER RESTART**
+   - Run test app: `.venv/bin/python examples/simple_app.py`
+   - Test MCP tools: `qt_connect`, `qt_snapshot`, `qt_click`, `qt_type`
+   - Verify no permission prompts
+   - Check logs: `~/.claude/debug/latest` for MCP activity
 
-3. **Live Testing**
-   ```bash
-   # Terminal 1: Run test app
-   .venv/bin/python examples/simple_app.py
-
-   # Terminal 2: Claude Code session
-   # Use tools: qt_connect, qt_snapshot, qt_click, etc.
-   # Check logs in ~/.claude/debug/latest for detailed MCP activity
-   ```
-
-4. **Fix Integration Test**
+3. **Fix Integration Test**
    - Debug socket connection issue
    - Ensure tests pass with UV setup
 
@@ -323,7 +359,8 @@ PQTI/
 - [x] Python executable exists (`.venv/bin/python`)
 - [x] MCP server module loads without errors
 - [x] Comprehensive logging added (no silent failures)
-- [ ] Claude Code restarted to load MCP server ← **NEXT STEP**
+- [x] Permissions configured in `settings.local.json`
+- [ ] Claude Code restarted to apply permissions ← **NEXT STEP**
 
 **MCP Integration Tests (After CC Restart):**
 - [ ] Claude Code loads MCP server successfully
@@ -364,9 +401,9 @@ PQTI/
 - Architecture proven via integration tests
 - Ready for real-world testing
 
-**Next Session:** Restart Claude Code and verify MCP tools load! 🚀
+**Next Session:** Restart Claude Code and test live! 🚀
 
-**Last Updated:** 2026-02-02 Evening (MCP config FIXED - .mcp.json created, logging enhanced)
+**Last Updated:** 2026-02-02 Late Evening (Permissions FIXED - settings.local.json updated, ready for testing)
 
 ---
 

@@ -84,12 +84,38 @@ uv pip install -e .
 
 ---
 
+## Recent Verification (2026-02-02 Afternoon)
+
+✅ **MCP Configuration Verified:**
+- Config file at `~/.claude/mcp_config.json` is correct
+- Python executable exists: `.venv/bin/python` → Python 3.13.11
+- MCP server module loads without errors
+- Server prints: "Starting PyQt Instrument MCP Server"
+
+⚠️ **Action Required:**
+- **Claude Code restart needed** to load the pyqt-instrument MCP server
+- MCP servers are only loaded at Claude Code startup
+- Current session has context7 and playwright, but not pyqt-instrument tools
+
+**Next Action:** Exit and restart Claude Code, then verify tools are available:
+- `qt_connect`, `qt_snapshot`, `qt_click`, `qt_type`, `qt_ping`
+
+---
+
 ## What's Next
 
 ### Immediate (Testing Phase)
 
-1. **Start Claude Code in PQTI folder**
-   - Verify MCP tools load
+1. **Restart Claude Code** ← **CURRENT STEP**
+   - Exit this session completely
+   - Restart Claude Code in PQTI folder
+   - Verify MCP tools load successfully
+
+2. **Verify MCP Tools Available**
+   - Check for `qt_connect`, `qt_snapshot`, `qt_click`, `qt_type`, `qt_ping`
+   - Test basic connectivity
+
+3. **Live Testing**
    - Test with simple_app.py
    - Confirm end-to-end flow works
 
@@ -221,12 +247,21 @@ PQTI/
 
 ## Testing Checklist
 
+**Pre-Flight Checks:**
+- [x] MCP config file exists and is valid
+- [x] Python executable exists (`.venv/bin/python`)
+- [x] MCP server module loads without errors
+- [ ] Claude Code restarted to load MCP server
+
+**MCP Integration Tests:**
 - [ ] Claude Code loads MCP server successfully
 - [ ] `qt_connect` tool works
 - [ ] `qt_snapshot` returns widget tree
 - [ ] `qt_click` triggers button actions
 - [ ] `qt_type` enters text correctly
 - [ ] Multiple commands work in sequence
+
+**Integration & Real-World Tests:**
 - [ ] Integration test passes with UV setup
 - [ ] C3 integration works
 - [ ] CMC integration works
@@ -255,4 +290,6 @@ PQTI/
 - Architecture proven via integration tests
 - Ready for real-world testing
 
-**Next Session:** Start Claude Code in PQTI and test live! 🚀
+**Next Session:** Restart Claude Code and verify MCP tools load! 🚀
+
+**Last Updated:** 2026-02-02 (MCP config verified, awaiting restart)

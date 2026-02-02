@@ -15,8 +15,9 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-# Qt IPC client
-from .qt_client import QtInstrumentClient
+# Framework-agnostic app controller
+from .app_controller import AppController
+from .adapters.pyqt6 import PyQt6Adapter
 
 # Configure logging to stderr (stdout is for MCP protocol)
 logging.basicConfig(
@@ -26,8 +27,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global client instance
-qt_client: Optional[QtInstrumentClient] = None
+# Global controller instance
+controller: Optional[AppController] = None
 
 
 def create_tools() -> list[Tool]:
@@ -104,20 +105,21 @@ def create_tools() -> list[Tool]:
 
 
 async def handle_tool_call(name: str, arguments: dict[str, Any]) -> list[TextContent]:
-    """Handle tool calls from Claude Code."""
-    global qt_client
+    """Handle tool calls from Claude Code (now framework-agnostic!)."""
+    global controller
 
     logger.info(f"Tool call: {name} with args: {arguments}")
 
     try:
         if name == "qt_connect":
             server_name = arguments.get("server_name", "qt_instrument")
-            logger.info(f"Attempting to connect to Qt server: {server_name}")
-            qt_client = QtInstrumentClient()
-            success = await qt_client.connect(server_name)
+            logger.info(f"Attempting to connect via PyQt6 adapter: {server_name}")
 
-            if success:
-                logger.info(f"Successfully connected to Qt application: {server_name}")
+            # Use controller to connect (framework-agnostic!)
+            result = await controller.connect(framework="pyqt6", target=server_name)
+
+            if result.get("success"):
+                logger.info(f"Successfully connected to application: {server_name}")
                 return [
                     TextContent(
                         type="text",
@@ -125,16 +127,17 @@ async def handle_tool_call(name: str, arguments: dict[str, Any]) -> list[TextCon
                     )
                 ]
             else:
-                logger.warning(f"Failed to connect to Qt application: {server_name}")
+                error = result.get("error", "Unknown error")
+                logger.warning(f"Failed to connect to application: {error}")
                 return [
                     TextContent(
                         type="text",
-                        text=f"✗ Failed to connect to Qt application. Make sure the app is running with instrumentation enabled.",
+                        text=f"✗ Failed to connect: {error}",
                     )
                 ]
 
         # All other commands require an active connection
-        if qt_client is None:
+        if controller.current_adapter is None:
             logger.warning(f"Tool {name} called without active connection")
             return [
                 TextContent(
@@ -144,8 +147,13 @@ async def handle_tool_call(name: str, arguments: dict[str, Any]) -> list[TextCon
             ]
 
         if name == "qt_snapshot":
-            logger.info("Getting Qt widget snapshot")
-            result = await qt_client.send_request("snapshot", {})
+            logger.info("Getting widget snapshot via controller")
+            result = await controller.execute("snapshot", {})
+
+            if "error" in result:
+                logger.error(f"Snapshot failed: {result['error']}")
+                return [TextContent(type="text", text=f"✗ Error: {result['error']}")]
+
             logger.info(f"Snapshot received with {len(str(result))} bytes")
             snapshot_json = json.dumps(result, indent=2)
             return [TextContent(type="text", text=f"Widget Tree:\n```json\n{snapshot_json}\n```")]
@@ -154,7 +162,8 @@ async def handle_tool_call(name: str, arguments: dict[str, Any]) -> list[TextCon
             ref = arguments["ref"]
             button = arguments.get("button", "left")
             logger.info(f"Clicking widget {ref} with button {button}")
-            result = await qt_client.send_request("click", {"ref": ref, "button": button})
+
+            result = await controller.execute("click", {"ref": ref, "button": button})
 
             if result.get("success"):
                 logger.info(f"Successfully clicked widget: {ref}")
@@ -169,9 +178,12 @@ async def handle_tool_call(name: str, arguments: dict[str, Any]) -> list[TextCon
             text = arguments["text"]
             submit = arguments.get("submit", False)
             logger.info(f"Typing into widget {ref}: '{text}' (submit={submit})")
-            result = await qt_client.send_request(
-                "type", {"ref": ref, "text": text, "submit": submit}
-            )
+
+            result = await controller.execute("type_text", {
+                "ref": ref,
+                "text": text,
+                "submit": submit
+            })
 
             if result.get("success"):
                 logger.info(f"Successfully typed into widget: {ref}")
@@ -182,8 +194,9 @@ async def handle_tool_call(name: str, arguments: dict[str, Any]) -> list[TextCon
                 return [TextContent(type="text", text=f"✗ Failed to type text: {error}")]
 
         elif name == "qt_ping":
-            logger.debug("Pinging Qt application")
-            result = await qt_client.send_request("ping", {})
+            logger.debug("Pinging application via controller")
+            result = await controller.execute("ping", {})
+
             if result.get("status") == "ok":
                 logger.debug("Ping successful")
                 return [TextContent(type="text", text="✓ Connection alive")]
@@ -202,9 +215,16 @@ async def handle_tool_call(name: str, arguments: dict[str, Any]) -> list[TextCon
 
 async def main():
     """Main entry point for MCP server."""
+    global controller
+
     logger.info("Starting PyQt Instrument MCP Server")
     logger.info(f"Python version: {sys.version}")
     logger.info(f"Working directory: {sys.path[0]}")
+
+    # Initialize controller and register adapters
+    controller = AppController()
+    controller.register_adapter(PyQt6Adapter())
+    logger.info(f"Registered adapters: {controller.list_adapters()}")
 
     try:
         server = Server("pyqt-instrument")

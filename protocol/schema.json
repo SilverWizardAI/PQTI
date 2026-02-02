@@ -1,0 +1,281 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/SilverWizardAI/PQTI/protocol/v1.0/schema.json",
+  "title": "GUI Instrumentation Protocol",
+  "description": "Language-independent protocol for GUI automation",
+  "version": "1.0.0",
+  "definitions": {
+    "WidgetNode": {
+      "type": "object",
+      "required": ["ref", "type", "visible", "enabled", "geometry", "properties", "children"],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "Unique hierarchical reference path"
+        },
+        "type": {
+          "type": "string",
+          "description": "Widget/element type (QPushButton, button, etc.)"
+        },
+        "objectName": {
+          "type": ["string", "null"],
+          "description": "Element ID or name (if any)"
+        },
+        "visible": {
+          "type": "boolean",
+          "description": "Is element visible?"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Is element enabled/interactive?"
+        },
+        "geometry": {
+          "type": "object",
+          "required": ["x", "y", "width", "height"],
+          "properties": {
+            "x": {"type": "number"},
+            "y": {"type": "number"},
+            "width": {"type": "number"},
+            "height": {"type": "number"}
+          }
+        },
+        "properties": {
+          "type": "object",
+          "description": "Framework-specific properties",
+          "additionalProperties": true
+        },
+        "children": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/WidgetNode"}
+        }
+      }
+    },
+    "ConnectRequest": {
+      "type": "object",
+      "required": ["jsonrpc", "method", "params", "id"],
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "method": {"const": "connect"},
+        "params": {
+          "type": "object",
+          "required": ["target"],
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "Connection target (server name, URL, etc.)"
+            }
+          }
+        },
+        "id": {"type": ["number", "string"]}
+      }
+    },
+    "ConnectResponse": {
+      "type": "object",
+      "required": ["jsonrpc", "result", "id"],
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "result": {
+          "type": "object",
+          "required": ["success"],
+          "properties": {
+            "success": {"type": "boolean"},
+            "app_info": {
+              "type": "object",
+              "properties": {
+                "framework": {"type": "string"},
+                "version": {"type": "string"},
+                "transport": {"type": "string"},
+                "pid": {"type": "number"},
+                "title": {"type": "string"}
+              }
+            }
+          }
+        },
+        "id": {"type": ["number", "string"]}
+      }
+    },
+    "SnapshotRequest": {
+      "type": "object",
+      "required": ["jsonrpc", "method", "params", "id"],
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "method": {"const": "snapshot"},
+        "params": {"type": "object"},
+        "id": {"type": ["number", "string"]}
+      }
+    },
+    "SnapshotResponse": {
+      "type": "object",
+      "required": ["jsonrpc", "result", "id"],
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "result": {"$ref": "#/definitions/WidgetNode"},
+        "id": {"type": ["number", "string"]}
+      }
+    },
+    "ClickRequest": {
+      "type": "object",
+      "required": ["jsonrpc", "method", "params", "id"],
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "method": {"const": "click"},
+        "params": {
+          "type": "object",
+          "required": ["ref"],
+          "properties": {
+            "ref": {
+              "type": "string",
+              "description": "Element reference"
+            },
+            "button": {
+              "type": "string",
+              "enum": ["left", "right", "middle"],
+              "default": "left"
+            },
+            "modifiers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["ctrl", "cmd", "meta", "shift", "alt"]
+              }
+            }
+          }
+        },
+        "id": {"type": ["number", "string"]}
+      }
+    },
+    "ClickResponse": {
+      "type": "object",
+      "required": ["jsonrpc", "result", "id"],
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "result": {
+          "type": "object",
+          "required": ["success"],
+          "properties": {
+            "success": {"type": "boolean"}
+          }
+        },
+        "id": {"type": ["number", "string"]}
+      }
+    },
+    "TypeRequest": {
+      "type": "object",
+      "required": ["jsonrpc", "method", "params", "id"],
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "method": {"const": "type"},
+        "params": {
+          "type": "object",
+          "required": ["ref", "text"],
+          "properties": {
+            "ref": {
+              "type": "string",
+              "description": "Element reference"
+            },
+            "text": {
+              "type": "string",
+              "description": "Text to type"
+            },
+            "submit": {
+              "type": "boolean",
+              "default": false,
+              "description": "Press Enter after typing"
+            },
+            "clear": {
+              "type": "boolean",
+              "default": false,
+              "description": "Clear existing text first"
+            }
+          }
+        },
+        "id": {"type": ["number", "string"]}
+      }
+    },
+    "TypeResponse": {
+      "type": "object",
+      "required": ["jsonrpc", "result", "id"],
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "result": {
+          "type": "object",
+          "required": ["success"],
+          "properties": {
+            "success": {"type": "boolean"}
+          }
+        },
+        "id": {"type": ["number", "string"]}
+      }
+    },
+    "PingRequest": {
+      "type": "object",
+      "required": ["jsonrpc", "method", "params", "id"],
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "method": {"const": "ping"},
+        "params": {"type": "object"},
+        "id": {"type": ["number", "string"]}
+      }
+    },
+    "PingResponse": {
+      "type": "object",
+      "required": ["jsonrpc", "result", "id"],
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "result": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["ok", "error"]
+            },
+            "timestamp": {"type": "number"},
+            "uptime": {"type": "number"}
+          }
+        },
+        "id": {"type": ["number", "string"]}
+      }
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "required": ["jsonrpc", "error", "id"],
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "error": {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {
+            "code": {
+              "type": "number",
+              "description": "Error code (JSON-RPC or protocol-specific)"
+            },
+            "message": {
+              "type": "string",
+              "description": "Human-readable error message"
+            },
+            "data": {
+              "type": "object",
+              "description": "Additional error context",
+              "additionalProperties": true
+            }
+          }
+        },
+        "id": {"type": ["number", "string", "null"]}
+      }
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/definitions/ConnectRequest"},
+    {"$ref": "#/definitions/ConnectResponse"},
+    {"$ref": "#/definitions/SnapshotRequest"},
+    {"$ref": "#/definitions/SnapshotResponse"},
+    {"$ref": "#/definitions/ClickRequest"},
+    {"$ref": "#/definitions/ClickResponse"},
+    {"$ref": "#/definitions/TypeRequest"},
+    {"$ref": "#/definitions/TypeResponse"},
+    {"$ref": "#/definitions/PingRequest"},
+    {"$ref": "#/definitions/PingResponse"},
+    {"$ref": "#/definitions/ErrorResponse"}
+  ]
+}

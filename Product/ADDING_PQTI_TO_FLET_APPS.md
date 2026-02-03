@@ -237,21 +237,28 @@ class InstrumentationHandler(BaseHTTPRequestHandler):
                 if found:
                     continue
 
-                # Try indexed reference: TypeName[index]
+                # Try indexed reference: TypeName[index] or TypeName[content]
                 if '[' in part:
                     type_name = part.split('[')[0]
-                    index = int(part.split('[')[1].rstrip(']'))
+                    index_str = part.split('[')[1].rstrip(']')
 
-                    matching = [
-                        c for c in current.controls
-                        if type(c).__name__ == type_name
-                    ]
-
-                    if index < len(matching):
-                        current = matching[index]
-                        continue  # Continue to next part of path
+                    # Handle [content] as index 0
+                    if index_str == 'content':
+                        index = 0
                     else:
-                        return None
+                        index = int(index_str)
+
+                    # Use overall index, then verify type matches
+                    # (Snapshot uses overall index: Container[11] = 11th child overall)
+                    if index < len(current.controls):
+                        control = current.controls[index]
+                        if type(control).__name__ == type_name:
+                            current = control
+                            continue
+                        else:
+                            return None  # Type mismatch
+                    else:
+                        return None  # Index out of range
                 else:
                     return None
             else:

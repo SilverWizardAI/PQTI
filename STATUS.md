@@ -697,66 +697,126 @@ PQTI/
 
 ---
 
-## FLET DOCUMENTATION BUG FIX (2026-02-03) - ✅ FIXED
+## THREE CRITICAL FLET BUGS FIXED (2026-02-03) - ✅ ALL FIXED
 
-### 🐛 Bug Discovered During MacR Testing
+### 🐛 Three Compounding Bugs Discovered During MacR Testing
 
 **Reporter:** MacR (Mac Retriever) project during real-world PQTI testing
-**Severity:** High (blocks Flet app automation)
-**Status:** ✅ FIXED
+**Severity:** CRITICAL (blocks all real-world Flet app automation)
+**Status:** ✅ ALL THREE BUGS FIXED
 
-### Issue
-Control navigation failed for nested `Type[index]` references in the documented Flet instrumentation code. When navigating paths like `root/Column[0]/TextField[1]`, the function would find `Column[0]` but fail to continue processing `TextField[1]`.
+### Executive Summary
+MacR discovered **three compounding bugs** in the Flet `_find_control_by_ref()` navigation function. These bugs worked together to completely block UI automation for nested container structures. **Critical finding:** Fixing just one or two bugs wouldn't work - all three needed to be fixed together.
 
-### Root Cause
-Missing `continue` statement in `_find_control_by_ref()` function after successfully matching type-indexed controls. The code would set `current = matching[index]` but then fall through to `return None` instead of continuing to the next path component.
+### Bug #1: Missing `continue` Statement
+**Impact:** High - blocks multi-level navigation
+**Lines Changed:** 1
 
-### Impact
-- **Blocked UI automation** for apps with nested containers (columns, rows, etc.)
-- **MacR testing halted** - search tab has nested structure that couldn't be navigated
-- **Workaround required** - database-level tests + manual UI testing
+After successfully finding a type-indexed control, code failed to continue to next path component.
 
-### Fix Applied
-
-**Buggy Code:**
 ```python
+# Before:
 if index < len(matching):
     current = matching[index]
     # ❌ Missing continue - falls through to return None
-else:
-    return None
-```
 
-**Fixed Code:**
-```python
+# After:
 if index < len(matching):
     current = matching[index]
     continue  # ✅ Continue to next part of path
+```
+
+### Bug #2: Index Mismatch (Overall vs Type-Filtered)
+**Impact:** CRITICAL - breaks all type-indexed navigation
+**Lines Changed:** 5
+
+**Fundamental architectural flaw:** Snapshot and navigator used incompatible indexing:
+- **Snapshot:** `Container[11]` = "child at overall position 11"
+- **Buggy Navigator:** Filtered Containers first, then took index 11 → wrong control!
+
+```python
+# Before (WRONG):
+matching = [c for c in current.controls if type(c).__name__ == type_name]
+if index < len(matching):
+    current = matching[index]  # ❌ Type-filtered index
+
+# After (CORRECT):
+if index < len(current.controls):
+    control = current.controls[index]  # ✅ Overall index
+    if type(control).__name__ == type_name:  # ✅ Verify type
+        current = control
+        continue
+```
+
+### Bug #3: `[content]` References Not Handled
+**Impact:** High - blocks single-child container navigation
+**Lines Changed:** 2
+
+Navigator crashed trying to parse `TypeName[content]` references with `int('content')`.
+
+```python
+# Before:
+index = int(part.split('[')[1].rstrip(']'))  # ❌ Crashes on 'content'
+
+# After:
+index_str = part.split('[')[1].rstrip(']')
+if index_str == 'content':
+    index = 0  # ✅ Treat content as first child
 else:
-    return None
+    index = int(index_str)
+```
+
+### MacR's Discovery Process
+1. **Systematic testing:** Tested paths of increasing complexity, found failure at level 4
+2. **Snapshot analysis:** Compared JSON structure to navigation logic
+3. **Source code investigation:** Found all three bugs by comparing snapshot generation vs navigation
+4. **Complete fix:** Applied ~8 lines of code changes to fix all three bugs
+
+**Test path that failed:**
+```python
+"root/Container[0]/Column[content]/Container[11]/Row[content]/ElevatedButton[0]"
+# Failed before fixes, works perfectly after all three fixes applied
 ```
 
 ### Files Updated
-1. ✅ `Product/ADDING_PQTI_TO_FLET_APPS.md` - Line 252 (added continue)
-2. ✅ `docs/FLET_ADAPTER_PLAN.md` - Complete rewrite with fixed comprehensive version
-3. ✅ `PQTI_BUG_REPORT.md` - Detailed bug analysis and fix documentation
+1. ✅ `Product/ADDING_PQTI_TO_FLET_APPS.md` (lines 240-262 - all three fixes)
+2. ✅ `docs/FLET_ADAPTER_PLAN.md` (complete rewrite with all fixes)
+3. ✅ `PQTI_BUG_REPORT.md` (comprehensive three-bug analysis)
+4. ✅ `STATUS.md` (this file - full documentation)
 
-### Verification
-After fix, nested navigation now works correctly:
+### Verification Results
+**MacR Test Results:** 10/10 automated search tests PASSED! ✅
+
 ```python
-# Now works:
-_find_control_by_ref("root/Column[0]/TextField[1]")  # ✅ Returns TextField
-_find_control_by_ref("root/Column[0]/Row[0]/Button[2]")  # ✅ Returns Button
+# Before all fixes:
+qt_click("root/Container[0]/Column[content]/Container[11]/Row[content]/ElevatedButton[0]")
+# ✗ Control not found
+
+# After all three fixes:
+qt_click("root/Container[0]/Column[content]/Container[11]/Row[content]/ElevatedButton[0]")
+# ✅ Click successful
 ```
 
-### Benefits
-- ✅ **MacR can now proceed** with PQTI-based UI automation
-- ✅ **Future Flet implementations** won't hit this bug
-- ✅ **Real-world testing validated** the documentation before wide adoption
-- ✅ **Bug report created** for reference and learning
+### Impact Assessment
+
+**Before fixes:**
+- ❌ MacR automation completely blocked
+- ❌ PQTI unusable for real-world Flet apps with nested containers
+- ❌ Workaround: database tests + manual UI testing only
+
+**After all three fixes:**
+- ✅ MacR automation fully working (10/10 tests passed)
+- ✅ PQTI ready for production Flet apps
+- ✅ Full UI automation at any nesting depth
 
 ### Discovery Credit
-This bug was discovered through **dogfooding** - MacR implemented the Flet instrumentation following PQTI docs, then used PQTI to test its own UI. This is exactly the validation process that makes PQTI better!
+**Exceptional debugging by MacR:**
+- Systematic testing methodology
+- Detailed source code analysis
+- Complete fix implementation
+- Comprehensive bug reporting
+
+This is **dogfooding done right** - discovering and fixing critical issues through real-world usage before wide adoption! 🎉
 
 ---
 
@@ -771,7 +831,7 @@ This bug was discovered through **dogfooding** - MacR implemented the Flet instr
 
 **Next Session:** Integrate with Flet and PyQt6 apps! 🎯
 
-**Last Updated:** 2026-02-03 (FLET BUG FIX ✅ - Fixed nested Type[index] navigation bug discovered during MacR testing, documentation updated, ready for Flet integration)
+**Last Updated:** 2026-02-03 (THREE FLET BUGS FIXED ✅ - MacR discovered 3 compounding navigation bugs (missing continue, index mismatch, [content] handling), all fixed, 10/10 MacR tests passing, ready for production)
 
 ---
 
